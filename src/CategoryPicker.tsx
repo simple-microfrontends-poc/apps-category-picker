@@ -1,6 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import "./styles/index.css";
-import { Category, fetchCategory, fetchRootCategories } from "./lib/api";
+import {
+  Category,
+  fetchCategory,
+  fetchRootCategories,
+  fetchCategoryPath,
+} from "./lib/api";
 
 /** A single node on the breadcrumb / selection path. */
 export interface CategoryRef {
@@ -17,6 +22,10 @@ export interface CategorySelection {
 }
 
 export interface CategoryPickerProps {
+  /** Open the picker pre-navigated to this category (deep link). When the
+   *  category is a leaf, its parent level is shown with the leaf preselected;
+   *  a branch is entered (its children are shown). */
+  categoryId?: number;
   /** Called with the chosen category when the user confirms. */
   onSelect: (selection: CategorySelection) => void;
   /** Optional cancel handler — renders an "Anuluj" button when provided. */
@@ -37,6 +46,7 @@ export interface CategoryPickerProps {
 const ROOT_KEY = "root" as const;
 
 function CategoryPicker({
+  categoryId,
   onSelect,
   onCancel,
   selectionMode = "leaf",
@@ -71,9 +81,58 @@ function CategoryPicker({
     }
   }, []);
 
+  // Open pre-navigated to a given category — replays the manual drill-down so
+  // the breadcrumb sits at the category's parent (leaf) or the category itself
+  // (branch), with the spine cached so back-navigation works.
+  const initFromCategory = useCallback(
+    async (catId: number) => {
+      setError(null);
+      setLoading(true);
+      try {
+        const fullPath = await fetchCategoryPath(catId);
+        const [roots, ...details] = await Promise.all([
+          fetchRootCategories(),
+          ...fullPath.map((n) => fetchCategory(n.id)),
+        ]);
+        cache.current.set(ROOT_KEY, roots);
+        details.forEach((d) => cache.current.set(d.id, d.children));
+
+        const target = details[details.length - 1];
+        const refs = fullPath.map((n) => ({ id: n.id, name: n.name }));
+
+        if (target.children.length > 0) {
+          // Branch — enter it.
+          setPath(refs);
+          setItems(target.children);
+          setSelectedLeaf(null);
+        } else if (fullPath.length === 1) {
+          // Root-level leaf — roots list with it preselected.
+          setPath([]);
+          setItems(roots);
+          setSelectedLeaf({ id: target.id, name: target.name });
+        } else {
+          // Leaf — show the parent's level with it preselected.
+          const parent = details[details.length - 2];
+          setPath(refs.slice(0, -1));
+          setItems(parent.children);
+          setSelectedLeaf({ id: target.id, name: target.name });
+        }
+      } catch {
+        await loadRoots();
+      } finally {
+        setLoading(false);
+      }
+    },
+    [loadRoots]
+  );
+
   useEffect(() => {
-    loadRoots();
-  }, [loadRoots]);
+    if (categoryId != null) {
+      initFromCategory(categoryId);
+    } else {
+      loadRoots();
+    }
+  }, [categoryId, initFromCategory, loadRoots]);
 
   const handleNodeClick = async (node: Category) => {
     if (pendingId !== null) return;

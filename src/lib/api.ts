@@ -19,3 +19,13 @@ export async function fetchCategory(id: number): Promise<Category> {
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
   return res.json();
 }
+
+/** Full breadcrumb (root first) for a category id — used to open the picker
+ *  pre-navigated to a given category. */
+export async function fetchCategoryPath(
+  id: number
+): Promise<{ id: number; name: string }[]> {
+  const res = await fetch(`${API_BASE}/categories/${id}/paths`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  return res.json();
+}
