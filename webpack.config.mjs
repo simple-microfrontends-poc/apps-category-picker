@@ -33,6 +33,10 @@ export default (_env, argv) => {
   const mode = argv.mode ?? "production";
   loadEnv(mode);
 
+  // publicPath must end with "/", else webpack concatenates chunk names straight
+  // onto it (e.g. "http://example.com" + "main.js" -> "http://example.commain.js").
+  const publicPath = (process.env.PUBLIC_PATH ?? "http://localhost:3003/").replace(/\/*$/, "/");
+
   return {
     entry: "./src/index.ts",
     // Minified prod bundle (no maps); readable dev bundle with real source maps.
@@ -41,7 +45,7 @@ export default (_env, argv) => {
       path: path.join(__dirname, "dist"),
       filename: "[name].js",
       clean: true,
-      publicPath: process.env.PUBLIC_PATH ?? "http://localhost:3003/",
+      publicPath,
     },
     module: {
       rules: [
