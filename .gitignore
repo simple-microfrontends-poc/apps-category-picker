@@ -1,3 +1,8 @@
 dist
 node_modules
 *.map
+
+# Local/production env files — keep the committed template only.
+.env
+.env.*
+!.env.example
